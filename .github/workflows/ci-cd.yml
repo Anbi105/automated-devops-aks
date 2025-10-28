@@ -1,3 +1,5 @@
+# .github/workflows/ci-cd.yml
+
 name: Azure AKS CI/CD Pipeline
 
 on:
@@ -6,12 +8,8 @@ on:
       - main
   workflow_dispatch:
 
-# ✅ REMOVE THIS ENTIRE BLOCK (it triggers OIDC)
-# permissions:
-#   id-token: write
-#   contents: read
-
 env:
+  # --- Standard Azure/AKS Variables ---
   AZURE_RESOURCE_GROUP: devops-aks-proj-rg
   AZURE_AKS_CLUSTER: devops-aks-proj-aks
   ACR_LOGIN_SERVER: devopsaksprojacr.azurecr.io
@@ -22,6 +20,7 @@ jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
     
+    # --- Terraform Environment Variables (Used implicitly by Terraform) ---
     env:
       ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -32,28 +31,52 @@ jobs:
       - name: 1. Checkout Code
         uses: actions/checkout@v4
 
-      - name: 2. Azure Login & ACR Authentication
+      - name: 2. Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      # --- CRITICAL FIX: Correctly pass individual secrets to azure/login ---
+      - name: 3. Azure Login for CLI Commands
         uses: azure/login@v1
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          # These parameters MUST match the individual GitHub Secret names
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          # The service principal password/secret
+          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }} 
+          
+      - name: 4. Terraform Init
+        run: terraform init -backend-config="storage_account_name=tfstate874312" -backend-config="container_name=tfstate" -backend-config="resource_group_name=${AZURE_RESOURCE_GROUP}"
 
-      - name: 3. Build & Push Docker Image
+      - name: 5. Terraform Apply (Provision Infrastructure)
+        run: terraform apply -auto-approve
+
+      - name: 6. Build & Push Docker Image
         run: |
+          # Use az CLI to log into Azure Container Registry (ACR)
           az acr login --name ${ACR_LOGIN_SERVER}
+          
+          # Build and tag the image
           docker build -t ${ACR_LOGIN_SERVER}/${APP_IMAGE_NAME}:${IMAGE_TAG} ./app
+          
+          # Push the image to ACR
           docker push ${ACR_LOGIN_SERVER}/${APP_IMAGE_NAME}:${IMAGE_TAG}
 
-      - name: 4. Get AKS Kubeconfig Credentials
+      - name: 7. Get AKS Kubeconfig Credentials
+        # This logs into AKS and sets up kubectl context for the next steps
         run: |
           az aks get-credentials --resource-group ${AZURE_RESOURCE_GROUP} --name ${AZURE_AKS_CLUSTER} --overwrite-existing
 
-      - name: 5. Deploy to AKS using Manifests
+      - name: 8. Deploy to AKS using Manifests
         run: |
+          # Replace placeholder image tag in deployment file
           sed -i "s|__ACR_LOGIN_SERVER__/__APP_IMAGE_NAME__:__IMAGE_TAG__|${ACR_LOGIN_SERVER}/${APP_IMAGE_NAME}:${IMAGE_TAG}|g" k8s/deployment.yml
+          
+          # Apply the service and deployment manifests
           kubectl apply -f k8s/service.yml 
           kubectl apply -f k8s/deployment.yml
           
-      - name: 6. Deployment Verification & Status Check
+      - name: 9. Deployment Verification & Status Check
         run: |
           echo "Waiting for deployment to become ready..."
           kubectl rollout status deployment/flask-app-deployment --timeout=5m
