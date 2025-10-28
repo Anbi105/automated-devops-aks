@@ -41,8 +41,11 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS_JSON }}
       
-      - name: 4. Terraform Init
-        run: terraform init -backend-config="storage_account_name=tfstate874312" -backend-config="container_name=tfstate" -backend-config="resource_group_name=${AZURE_RESOURCE_GROUP}"
+      - name: 4. Terraform Init (Temporary Local State)
+        run: terraform init
+        
+      # You may also need to check the 'Terraform Apply' step (Step 5)
+      # If your 'main.tf' references the storage account/resource group
 
       - name: 5. Terraform Apply (Provision Infrastructure)
         run: terraform apply -auto-approve
