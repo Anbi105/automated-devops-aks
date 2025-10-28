@@ -10,7 +10,10 @@ on:
 # --------------------------------------------------------------------
 # FIX: ADDED PERMISSIONS BLOCK TO RESOLVE AZURE LOGIN ERROR
 # --------------------------------------------------------------------
-
+permissions:
+  id-token: write
+  contents: read
+  
 env:
   # Variables used by the pipeline steps
   AZURE_RESOURCE_GROUP: devops-aks-proj-rg
