@@ -46,9 +46,18 @@ jobs:
         
       # You may also need to check the 'Terraform Apply' step (Step 5)
       # If your 'main.tf' references the storage account/resource group
-
       - name: 5. Terraform Apply (Provision Infrastructure)
-        run: terraform apply -auto-approve
+        run: |
+          # Inject all credentials and variables directly into the apply command
+          terraform apply -auto-approve \
+            -var "client_id=${{ secrets.AZURE_CLIENT_ID }}" \
+            -var "client_secret=${{ secrets.AZURE_CLIENT_SECRET }}" \
+            -var "tenant_id=${{ secrets.AZURE_TENANT_ID }}" \
+            -var "subscription_id=${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            -var "resource_group_name=${{ env.AZURE_RESOURCE_GROUP }}" \
+            -var "cluster_name=${{ env.AZURE_AKS_CLUSTER }}" \
+            -var "acr_name=${{ env.ACR_LOGIN_SERVER }}"
+
 
       - name: 6. Build & Push Docker Image
         run: |
