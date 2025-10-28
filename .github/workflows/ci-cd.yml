@@ -35,16 +35,12 @@ jobs:
         uses: hashicorp/setup-terraform@v3
 
       # --- CRITICAL FIX: Correctly pass individual secrets to azure/login ---
-      - name: 3. Azure Login for CLI Commands
+      # Step 3 is renamed and uses the single JSON secret
+      - name: 3. Azure Login for CLI Commands (Using JSON Secret)
         uses: azure/login@v1
         with:
-          # These parameters MUST match the individual GitHub Secret names
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          # The service principal password/secret
-          client-secret: ${{ secrets.AZURE_CLIENT_SECRET }} 
-          
+          creds: ${{ secrets.AZURE_CREDENTIALS_JSON }}
+      
       - name: 4. Terraform Init
         run: terraform init -backend-config="storage_account_name=tfstate874312" -backend-config="container_name=tfstate" -backend-config="resource_group_name=${AZURE_RESOURCE_GROUP}"
 
