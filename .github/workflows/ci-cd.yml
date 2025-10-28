@@ -10,9 +10,6 @@ on:
 # --------------------------------------------------------------------
 # FIX: ADDED PERMISSIONS BLOCK TO RESOLVE AZURE LOGIN ERROR
 # --------------------------------------------------------------------
-permissions:
-  id-token: write # Essential for secure, password-less Azure login (OIDC)
-  contents: read  # Required to check out the repository code
 
 env:
   # Variables used by the pipeline steps
