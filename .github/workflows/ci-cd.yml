@@ -1,4 +1,3 @@
-# .github/workflows/ci-cd.yml
 name: Azure AKS CI/CD Pipeline
 
 on:
@@ -7,15 +6,12 @@ on:
       - main
   workflow_dispatch:
 
-# --------------------------------------------------------------------
-# FIX: ADDED PERMISSIONS BLOCK TO RESOLVE AZURE LOGIN ERROR
-# --------------------------------------------------------------------
-permissions:
-  id-token: write
-  contents: read
-  
+# ✅ REMOVE THIS ENTIRE BLOCK (it triggers OIDC)
+# permissions:
+#   id-token: write
+#   contents: read
+
 env:
-  # Variables used by the pipeline steps
   AZURE_RESOURCE_GROUP: devops-aks-proj-rg
   AZURE_AKS_CLUSTER: devops-aks-proj-aks
   ACR_LOGIN_SERVER: devopsaksprojacr.azurecr.io
@@ -26,7 +22,6 @@ jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
     
-    # Passes Azure secret credentials to the robot
     env:
       ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -37,13 +32,10 @@ jobs:
       - name: 1. Checkout Code
         uses: actions/checkout@v4
 
-      # --- Stage: Build & Push ---
       - name: 2. Azure Login & ACR Authentication
         uses: azure/login@v1
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: 3. Build & Push Docker Image
         run: |
@@ -51,19 +43,13 @@ jobs:
           docker build -t ${ACR_LOGIN_SERVER}/${APP_IMAGE_NAME}:${IMAGE_TAG} ./app
           docker push ${ACR_LOGIN_SERVER}/${APP_IMAGE_NAME}:${IMAGE_TAG}
 
-      # --- Stage: Deployment to AKS ---
       - name: 4. Get AKS Kubeconfig Credentials
-        # Grabs the necessary access file to talk to AKS
         run: |
           az aks get-credentials --resource-group ${AZURE_RESOURCE_GROUP} --name ${AZURE_AKS_CLUSTER} --overwrite-existing
 
       - name: 5. Deploy to AKS using Manifests
-        # Replaces the placeholder and sends instructions to Kubernetes
         run: |
-          # Use 'sed' command to update the image tag in deployment.yml
           sed -i "s|__ACR_LOGIN_SERVER__/__APP_IMAGE_NAME__:__IMAGE_TAG__|${ACR_LOGIN_SERVER}/${APP_IMAGE_NAME}:${IMAGE_TAG}|g" k8s/deployment.yml
-          
-          # Tell Kubernetes to create the service and the deployment
           kubectl apply -f k8s/service.yml 
           kubectl apply -f k8s/deployment.yml
           
